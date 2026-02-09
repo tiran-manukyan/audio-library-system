@@ -1,0 +1,26 @@
+services:
+  resource-db:
+    image: postgres:17-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: resource-db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - resource_data:/var/lib/postgresql/data
+
+  song-db:
+    image: postgres:17-alpine
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: song-db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - song_data:/var/lib/postgresql/data
+
+volumes:
+  resource_data:
+  song_data:
