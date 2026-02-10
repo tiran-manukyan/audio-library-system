@@ -1,6 +1,6 @@
 package audiohub.repository;
 
-import audiohub.entity.SongEntity;
+import audiohub.entity.ResourceEntity;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
@@ -9,10 +9,10 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Set;
 
-public interface SongRepository extends JpaRepository<SongEntity, Long> {
+public interface ResourceRepository extends JpaRepository<ResourceEntity, Long> {
 
     @Modifying
     @Transactional
-    @Query(value = "DELETE FROM songs WHERE id IN (:ids) RETURNING id", nativeQuery = true)
+    @Query(value = "DELETE FROM resources WHERE id IN (:ids) RETURNING id", nativeQuery = true)
     Set<Long> deleteAndReturnIds(@Param("ids") Set<Long> ids);
 }

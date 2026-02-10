@@ -6,9 +6,9 @@ import java.util.Map;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public record ApiError(
-        String errorMessage,
-        Map<String, String> details,
-        String errorCode
+    String errorMessage,
+    Map<String, String> details,
+    String errorCode
 ) {
     public ApiError(String errorMessage, String errorCode) {
         this(errorMessage, null, errorCode);

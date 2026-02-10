@@ -4,7 +4,11 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
+import lombok.Setter;
 
 @Entity
 @Getter
@@ -17,20 +21,20 @@ public class SongEntity {
 
     @Id
     @Column(nullable = false)
-    private Long resourceId;
+    private Long id;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 100)
     private String name;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 100)
     private String artist;
 
-    @Column(nullable = false)
+    @Column(nullable = false, length = 100)
     private String album;
 
-    @Column(nullable = false)
-    private Integer year;
+    @Column(nullable = false, length = 4)
+    private String year;
 
-    @Column(nullable = false)
-    private String duration; // mm:ss
+    @Column(nullable = false, length = 5)
+    private String duration;
 }
