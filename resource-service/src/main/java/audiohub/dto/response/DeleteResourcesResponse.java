@@ -1,6 +1,6 @@
 package audiohub.dto.response;
 
-import java.util.List;
+import java.util.Set;
 
-public record DeleteResourcesResponse(List<Long> ids) {
+public record DeleteResourcesResponse(Set<Long> ids) {
 }

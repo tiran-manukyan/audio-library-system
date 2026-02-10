@@ -7,8 +7,6 @@
         <version>0.0.1-SNAPSHOT</version>
     </parent>
 
-    <version>0.0.1-SNAPSHOT</version>
-
     <artifactId>resource-service</artifactId>
     <packaging>jar</packaging>
 
@@ -24,10 +22,6 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-webflux</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -48,6 +42,10 @@
             <version>1.18.30</version>
         </dependency>
         <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.apache.tika</groupId>
             <artifactId>tika-parser-audiovideo-module</artifactId>
             <version>3.2.3</version>
@@ -56,10 +54,6 @@
             <groupId>org.apache.tika</groupId>
             <artifactId>tika-core</artifactId>
             <version>3.2.3</version>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
     </dependencies>
 </project>
