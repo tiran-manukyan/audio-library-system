@@ -35,8 +35,19 @@ public class GlobalExceptionHandler {
         log.warn("Validation error: {}", ex.getMessage());
 
         Map<String, String> details = new HashMap<>();
+
         for (FieldError error : ex.getBindingResult().getFieldErrors()) {
-            details.put(error.getField(), error.getDefaultMessage());
+            String field = error.getField();
+            String message = error.getDefaultMessage();
+
+            if (details.containsKey(field)) {
+                if (message != null && message.contains("is required")) {
+                    details.put(field, message);
+                }
+
+            } else {
+                details.put(field, message);
+            }
         }
 
         return buildErrorResponse(

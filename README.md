@@ -5,7 +5,7 @@ A small, pragmatic microservices project built with **Spring Boot + Spring Data 
 - **resource-service**: stores MP3 bytes and extracts metadata (via Apache Tika).
 - **song-service**: stores and serves song metadata.
 
-The services communicate over HTTP, and the **resource-service uses an “outbox” pattern** to reliably deliver metadata changes to the song-service.
+The services communicate over HTTP.
 
 ---
 
@@ -17,8 +17,7 @@ The services communicate over HTTP, and the **resource-service uses an “outbox
 Responsibilities:
 - Accept an MP3 upload and store the raw bytes in its DB.
 - Extract metadata from the audio (name/artist/album/year/duration).
-- Enqueue “create metadata” / “delete metadata” events into an **outbox table**.
-- Publish outbox events to `song-service` in batches via scheduled jobs (and/or transaction events).
+- Send metadata to `song-service` via HTTP.
 
 API (core):
 - `POST /resources` (`Content-Type: audio/mpeg`) → stores file, returns generated resource ID
@@ -28,15 +27,12 @@ API (core):
 #### 2) `song-service`
 Responsibilities:
 - Persist metadata records keyed by `id` (same ID as resource ID).
-- Support single and bulk create.
-- Support delete by CSV or bulk request body.
+- Support single create and delete operations.
 
 API (core):
 - `POST /songs` → create one song metadata record
-- `POST /songs/bulk` → create many records (idempotent/conflict tolerant)
 - `GET /songs/{id}` → fetch metadata
 - `DELETE /songs?id=<csv>` → delete by CSV list of IDs
-- `POST /songs/delete-bulk` → delete in bulk via JSON body
 
 ---
 
@@ -45,15 +41,12 @@ API (core):
 ### Upload flow
 1. Client uploads an MP3 to `resource-service`.
 2. `resource-service` extracts metadata and stores MP3 bytes.
-3. `resource-service` writes an outbox event (`CREATE_METADATA`) in the same transaction.
-4. Outbox publisher delivers the event(s) to `song-service` (immediate/async + scheduled batch retries).
+3. `resource-service` sends metadata to `song-service` via HTTP POST.
 
 ### Delete flow
 1. Client requests delete on `resource-service` using a CSV list of resource IDs.
-2. `resource-service` deletes rows and writes outbox events (`DELETE_METADATA`) for the successfully deleted IDs.
-3. Outbox publisher calls `song-service` to delete metadata for those IDs.
-
-This keeps the two services **eventually consistent** while remaining resilient to temporary failures of either service.
+2. `resource-service` deletes rows from its DB.
+3. `resource-service` calls `song-service` to delete metadata for those IDs.
 
 ---
 
@@ -80,10 +73,9 @@ This keeps the two services **eventually consistent** while remaining resilient 
 ### 1) Start databases
 From the repository root:
 
-```shell script
+```shell
 docker compose up -d
 ```
-
 
 This starts:
 - `resource-db` (database `resource-db`)
@@ -97,24 +89,21 @@ This starts:
 In two terminals:
 
 **song-service**
-```shell script
+```shell
 ./mvnw -pl song-service spring-boot:run
 ```
 
-
 **resource-service**
-```shell script
+```shell
 ./mvnw -pl resource-service spring-boot:run
 ```
 
-
 #### Option B: build jars then run
-```shell script
+```shell
 ./mvnw clean package
 java -jar song-service/target/song-service-*.jar
 java -jar resource-service/target/resource-service-*.jar
 ```
-
 
 ### 3) Verify
 - resource-service: http://localhost:8080
@@ -129,10 +118,7 @@ java -jar resource-service/target/resource-service-*.jar
 - DB: `jdbc:postgresql://localhost:5432/resource-db`
 - Server port: `8080`
 - Song service URL: `http://localhost:8081`
-- Outbox settings:
-    - max attempts
-    - batch sizes
-    - scheduler enablement + delays
+- HTTP timeouts for song-service communication
 
 ### song-service
 `song-service/src/main/resources/application.properties` includes:
@@ -146,44 +132,28 @@ java -jar resource-service/target/resource-service-*.jar
 ## Example usage
 
 ### Upload an MP3
-```shell script
+```shell
 curl -X POST "http://localhost:8080/resources" \
   -H "Content-Type: audio/mpeg" \
   --data-binary "@./path/to/file.mp3"
 ```
 
-
 Response contains the generated resource ID.
 
 ### Download an MP3
-```shell script
+```shell
 curl -L "http://localhost:8080/resources/<id>" --output downloaded.mp3
 ```
 
-
 ### Delete resources (CSV)
-```shell script
+```shell
 curl -X DELETE "http://localhost:8080/resources?id=1,2,3"
 ```
 
-
 ### Fetch song metadata
-```shell script
+```shell
 curl "http://localhost:8081/songs/<id>"
 ```
-
-
----
-
-## Notes on the Outbox pattern (implementation detail)
-
-The outbox approach used here aims to provide:
-- **atomicity**: write resource row + outbox event in the same transaction
-- **retries**: failed deliveries increment attempts and store last error
-- **batching**: scheduled jobs process events in chunks
-- **idempotency**: song-service bulk create ignores conflicts for already-existing IDs
-
-This is a practical compromise that works well for small systems and is a stepping stone toward more advanced setups (Kafka, Debezium, etc.) if needed later.
 
 ---
 
@@ -194,8 +164,4 @@ audio-library-system/
   resource-service/
   song-service/
   compose.yaml
-  pom.xml
 ```
-
-
-Each service is a separate Maven module under the root aggregator POM.

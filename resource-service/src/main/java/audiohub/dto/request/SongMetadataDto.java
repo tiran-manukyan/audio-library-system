@@ -29,10 +29,10 @@ public class SongMetadataDto {
     private String album;
 
     @NotBlank(message = "Year is required")
-    @Pattern(regexp = "^$|^(19|20)\\d{2}$", message = "Year must be between 1900 and 2099")
+    @Pattern(regexp = "^(19|20)\\d{2}$", message = "Year must be between 1900 and 2099")
     private String year;
 
     @NotBlank(message = "Duration is required")
-    @Pattern(regexp = "^$|^\\d{2}:[0-5]\\d$", message = "Duration must be in mm:ss format with leading zeros")
+    @Pattern(regexp = "^\\d{2}:[0-5]\\d$", message = "Duration must be in mm:ss format with leading zeros")
     private String duration;
 }

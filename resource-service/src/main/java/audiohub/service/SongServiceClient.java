@@ -40,24 +40,6 @@ public class SongServiceClient {
         }
     }
 
-    public void createSongMetadataBulkJson(String bulkBodyJson) {
-        try {
-            log.debug("Bulk creating metadata");
-
-            songServiceRestClient.post()
-                    .uri("/songs/bulk")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(bulkBodyJson)
-                    .retrieve()
-                    .toBodilessEntity();
-
-        } catch (Exception e) {
-            throw new SongServiceException(
-                    "Failed to bulk create metadata",
-                    e
-            );
-        }
-    }
 
     public void deleteSongMetadataCSV(Set<Long> ids) {
         if (ids.isEmpty()) {
@@ -85,32 +67,6 @@ public class SongServiceClient {
                     e
             );
         }
-    }
-
-    public void deleteSongMetadataBulk(Set<Long> ids) {
-        if (ids.isEmpty()) {
-            return;
-        }
-
-        try {
-            log.debug("Bulk deleting metadata for {} resource IDs", ids.size());
-
-            songServiceRestClient.post()
-                    .uri("/songs/delete-bulk")
-                    .contentType(MediaType.APPLICATION_JSON)
-                    .body(new BulkDeleteRequest(ids))
-                    .retrieve()
-                    .toBodilessEntity();
-
-        } catch (Exception e) {
-            throw new SongServiceException(
-                    "Failed to bulk delete metadata for IDs: " + ids,
-                    e
-            );
-        }
-    }
-
-    private record BulkDeleteRequest(Set<Long> ids) {
     }
 
     private record CreateMetadataRequest(

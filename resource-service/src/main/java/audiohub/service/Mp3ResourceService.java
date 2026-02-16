@@ -13,7 +13,6 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,9 +28,8 @@ public class Mp3ResourceService {
     private final Validator validator;
     private final ResourceRepository resourceRepository;
     private final AudioMetadataExtractor metadataExtractor;
-    private final OutboxEventService outboxEventService;
+    private final SongServiceClient songServiceClient;
     private final ResourceIdParser resourceIdParser;
-    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public UploadResourceResponse store(byte[] audioData) {
@@ -46,16 +44,11 @@ public class Mp3ResourceService {
                 .build();
 
         resource = resourceRepository.save(resource);
-        outboxEventService.enqueueCreateMetadata(resource.getId(), metadata);
+        songServiceClient.createSongMetadata(resource.getId(), metadata);
 
-        log.info("Saved resource with ID: {} and enqueued outbox event", resource.getId());
+        log.info("Saved resource with ID: {}", resource.getId());
 
-        Long resourceId = resource.getId();
-        eventPublisher.publishEvent(
-                new TransactionalEventPublisher.ResourceCreatedEvent(resourceId, metadata)
-        );
-
-        return new UploadResourceResponse(resourceId);
+        return new UploadResourceResponse(resource.getId());
     }
 
     public byte[] getResource(String id) {
@@ -86,13 +79,9 @@ public class Mp3ResourceService {
             return new DeleteResourcesResponse(Set.of());
         }
 
-        outboxEventService.enqueueDeleteMetadata(deletedIds);
+        songServiceClient.deleteSongMetadataCSV(deletedIds);
 
-        log.info("Deleted {} resources and enqueued delete events", deletedIds.size());
-
-        eventPublisher.publishEvent(
-                new TransactionalEventPublisher.ResourcesDeletedEvent(deletedIds)
-        );
+        log.info("Deleted {} resources", deletedIds.size());
 
         return new DeleteResourcesResponse(deletedIds);
     }

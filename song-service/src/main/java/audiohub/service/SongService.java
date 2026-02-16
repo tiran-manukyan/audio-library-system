@@ -1,6 +1,5 @@
 package audiohub.service;
 
-import audiohub.dto.BulkCreateSongsRequest;
 import audiohub.dto.CreateSongResponse;
 import audiohub.dto.DeleteSongsResponse;
 import audiohub.dto.SongDto;
@@ -9,7 +8,6 @@ import audiohub.exception.InvalidSongIdException;
 import audiohub.exception.SongAlreadyExistsException;
 import audiohub.exception.SongNotFoundException;
 import audiohub.mapper.SongMapper;
-import audiohub.repository.SongBulkRepository;
 import audiohub.repository.SongRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -31,7 +29,6 @@ public class SongService {
     @PersistenceContext
     private EntityManager entityManager;
     private final SongRepository songRepository;
-    private final SongBulkRepository songBulkRepository;
     private final SongIdParser songIdParser;
     private final SongMapper mapper;
 
@@ -69,11 +66,6 @@ public class SongService {
         return mapper.toDto(songEntity);
     }
 
-    public void createSongsBulk(BulkCreateSongsRequest request) {
-        songBulkRepository.insertIgnoreConflictsById(request.songs());
-        log.info("Bulk created songs, received: {}, conflicts ignored (idempotent)",
-                request.songs().size());    }
-
     public DeleteSongsResponse deleteSongs(String idCsv) {
         Set<Long> parsedIds = songIdParser.parsePositiveIds(idCsv);
         if (parsedIds.isEmpty()) {
@@ -85,12 +77,6 @@ public class SongService {
         log.info("Deleted {} song metadata records", deletedIds.size());
 
         return new DeleteSongsResponse(deletedIds);
-    }
-
-    public void deleteSongsBulk(Set<Long> ids) {
-        Set<Long> actuallyDeletedIds = songRepository.deleteAndReturnIds(ids);
-
-        log.info("Bulk deleted {} song metadata records with IDs: {}", actuallyDeletedIds.size(), actuallyDeletedIds);
     }
 
     private void handleConstraintException(Long resourceId, ConstraintViolationException ex) {
@@ -108,7 +94,9 @@ public class SongService {
     private static <T extends Throwable> T findCause(Throwable ex, Class<T> type) {
         Throwable curr = ex;
         while (curr != null) {
-            if (type.isInstance(curr)) return type.cast(curr);
+            if (type.isInstance(curr)) {
+                return type.cast(curr);
+            }
             curr = curr.getCause();
         }
         return null;
