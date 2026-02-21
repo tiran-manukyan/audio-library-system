@@ -59,73 +59,69 @@ API (core):
 - PostgreSQL (two separate DBs)
 - Lombok, MapStruct (in song-service)
 - Apache Tika (in resource-service) for audio metadata extraction
-- Docker Compose for local Postgres instances
+- Docker + Docker Compose
 
 ---
 
-## Local development setup
+## Running the project
 
 ### Prerequisites
 - Java 21
 - Maven (or use the included Maven Wrapper)
 - Docker + Docker Compose
 
-### 1) Start databases
+### Option A: Local development (services in IntelliJ / on host, DBs in Docker)
+This is the most convenient dev loop.
+
+#### 1) Start only the databases
 From the repository root:
-
 ```shell
-docker compose up -d
+docker compose up -d resource-db song-db
 ```
-
 This starts:
 - `resource-db` (database `resource-db`)
 - `song-db` (database `song-db`)
 
-> Note: both containers use default credentials (`postgres` / `postgres`) for local development.
+> Credentials and URLs are configured to work both locally and in Docker (see `compose.yaml`, `.env`, and service `application.properties`).
 
-### 2) Run services
-
-#### Option A: run each service from its module
+#### 2) Run services
 In two terminals:
 
 **song-service**
 ```shell
 ./mvnw -pl song-service spring-boot:run
 ```
-
 **resource-service**
 ```shell
 ./mvnw -pl resource-service spring-boot:run
 ```
-
-#### Option B: build jars then run
-```shell
-./mvnw clean package
-java -jar song-service/target/song-service-*.jar
-java -jar resource-service/target/resource-service-*.jar
-```
-
-### 3) Verify
+#### 3) Verify
 - resource-service: http://localhost:8080
 - song-service: http://localhost:8081
 
 ---
 
-## Configuration
+### Option B: Docker Compose (everything in containers)
+Build and start all services and databases:
+```shell
+docker compose up -d --build
+```
+Verify:
+- resource-service: http://localhost:8080
+- song-service: http://localhost:8081
 
-### resource-service
-`resource-service/src/main/resources/application.properties` includes:
-- DB: `jdbc:postgresql://localhost:5432/resource-db`
-- Server port: `8080`
-- Song service URL: `http://localhost:8081`
-- HTTP timeouts for song-service communication
+To stop everything:
+```shell
+docker compose down
+```
+> Note: database data is not persisted between restarts (no mounted data volume).
 
-### song-service
-`song-service/src/main/resources/application.properties` includes:
-- DB: `jdbc:postgresql://localhost:5433/song-db`
-- Server port: `8081`
+---
 
-> Both services currently use `spring.jpa.hibernate.ddl-auto=update` for convenience. For production usage, a migration tool (e.g., Flyway/Liquibase) is recommended.
+## Configuration notes
+
+- Database schema is initialized by SQL scripts mounted into the PostgreSQL containers (see `init-scripts/`).
+- Hibernate DDL auto-generation is disabled (`spring.jpa.hibernate.ddl-auto=none`).
 
 ---
 
@@ -161,7 +157,9 @@ curl "http://localhost:8081/songs/<id>"
 
 ```
 audio-library-system/
-  resource-service/
-  song-service/
-  compose.yaml
+init-scripts/
+resource-service/
+song-service/
+compose.yaml
+.env
 ```

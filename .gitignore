@@ -39,11 +39,6 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
-# Environment / secrets (use placeholders instead)
-.env
-.env.*
-!*.env.example
-
 # Local runtime / temp
 *.tmp
 *.swp
