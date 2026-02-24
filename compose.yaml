@@ -1,4 +1,23 @@
 services:
+  eureka-server:
+    build:
+      context: ./eureka-server
+      dockerfile: Dockerfile
+    ports:
+      - "8761:8761"
+
+  api-gateway:
+    build:
+      context: ./api-gateway
+      dockerfile: Dockerfile
+    depends_on:
+      - eureka-server
+    ports:
+      - "8778:8778"
+    environment:
+      EUREKA_URL: ${EUREKA_URL}
+      GATEWAY_PORT: 8778
+
   resource-db:
     image: postgres:17-alpine
     ports:
@@ -27,12 +46,16 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - song-db
+      - eureka-server
+    deploy:
+      replicas: 2
     ports:
-      - "8081:8081"
+      - "8081-8082:8081"
     environment:
       SPRING_DATASOURCE_URL: ${SONG_DB_URL}
       SPRING_DATASOURCE_USERNAME: ${SONG_DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${SONG_DB_PASSWORD}
+      EUREKA_URL: ${EUREKA_URL}
 
   resource-service:
     build:
@@ -40,11 +63,14 @@ services:
       dockerfile: Dockerfile
     depends_on:
       - resource-db
-      - song-service
+      - eureka-server
+    deploy:
+      replicas: 1
     ports:
       - "8080:8080"
     environment:
       SPRING_DATASOURCE_URL: ${RESOURCE_DB_URL}
       SPRING_DATASOURCE_USERNAME: ${RESOURCE_DB_USER}
       SPRING_DATASOURCE_PASSWORD: ${RESOURCE_DB_PASSWORD}
+      EUREKA_URL: ${EUREKA_URL}
       SONG_SERVICE_URL: ${SONG_SERVICE_URL}

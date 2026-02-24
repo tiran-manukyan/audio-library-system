@@ -1,165 +1,207 @@
 # Audio Library System
 
-A small, pragmatic microservices project built with **Spring Boot + Spring Data JPA + PostgreSQL**, split into two services:
+A simple, practical microservices playground using **Spring Boot**, **Spring Data JPA**, and **PostgreSQL**.
+---
 
-- **resource-service**: stores MP3 bytes and extracts metadata (via Apache Tika).
-- **song-service**: stores and serves song metadata.
+## The Services
 
-The services communicate over HTTP.
+- **resource-service**  
+  Stores MP3 audio and extracts metadata (via Apache Tika).  
+  Handles all uploads/downloads.
+
+- **song-service**  
+  Keeps track of song metadata.
+
+- **eureka-server**  
+  Registers and helps services find each other. Check the dashboard at [http://localhost:8761](http://localhost:8761).
+
+- **api-gateway**  
+  (Docker only!) Lets you call all backend APIs through one URL.
 
 ---
 
-## Architecture (high level)
+## How Everything Talks
 
-### Services
-
-#### 1) `resource-service`
-Responsibilities:
-- Accept an MP3 upload and store the raw bytes in its DB.
-- Extract metadata from the audio (name/artist/album/year/duration).
-- Send metadata to `song-service` via HTTP.
-
-API (core):
-- `POST /resources` (`Content-Type: audio/mpeg`) → stores file, returns generated resource ID
-- `GET /resources/{id}` → returns MP3 bytes (`audio/mpeg`)
-- `DELETE /resources?id=<csv>` → deletes resources by CSV list of IDs
-
-#### 2) `song-service`
-Responsibilities:
-- Persist metadata records keyed by `id` (same ID as resource ID).
-- Support single create and delete operations.
-
-API (core):
-- `POST /songs` → create one song metadata record
-- `GET /songs/{id}` → fetch metadata
-- `DELETE /songs?id=<csv>` → delete by CSV list of IDs
+All the services register with Eureka.  
+When *in Docker Compose*, you call APIs via the gateway.  
+When *developing locally*, call each service directly!
 
 ---
 
-## Data & communication flow
+## How to Run
 
-### Upload flow
-1. Client uploads an MP3 to `resource-service`.
-2. `resource-service` extracts metadata and stores MP3 bytes.
-3. `resource-service` sends metadata to `song-service` via HTTP POST.
+### Pre-requirements
 
-### Delete flow
-1. Client requests delete on `resource-service` using a CSV list of resource IDs.
-2. `resource-service` deletes rows from its DB.
-3. `resource-service` calls `song-service` to delete metadata for those IDs.
-
----
-
-## Tech stack
-
-- Java **21** (Maven modules)
-- Spring Boot **3.5.x**
-- Spring MVC, Spring Validation
-- Spring Data JPA (Hibernate)
-- PostgreSQL (two separate DBs)
-- Lombok, MapStruct (in song-service)
-- Apache Tika (in resource-service) for audio metadata extraction
-- Docker + Docker Compose
-
----
-
-## Running the project
-
-### Prerequisites
 - Java 21
-- Maven (or use the included Maven Wrapper)
+- Maven (or just use `./mvnw`)
 - Docker + Docker Compose
-
-### Option A: Local development (services in IntelliJ / on host, DBs in Docker)
-This is the most convenient dev loop.
-
-#### 1) Start only the databases
-From the repository root:
-```shell
-docker compose up -d resource-db song-db
-```
-This starts:
-- `resource-db` (database `resource-db`)
-- `song-db` (database `song-db`)
-
-> Credentials and URLs are configured to work both locally and in Docker (see `compose.yaml`, `.env`, and service `application.properties`).
-
-#### 2) Run services
-In two terminals:
-
-**song-service**
-```shell
-./mvnw -pl song-service spring-boot:run
-```
-**resource-service**
-```shell
-./mvnw -pl resource-service spring-boot:run
-```
-#### 3) Verify
-- resource-service: http://localhost:8080
-- song-service: http://localhost:8081
 
 ---
 
-### Option B: Docker Compose (everything in containers)
-Build and start all services and databases:
-```shell
+### Option 1: Run Locally for Development
+
+1. **Start just the databases:**
+   ```sh
+   docker compose up -d resource-db song-db
+   ```
+
+2. **Start Eureka server:**
+   ```sh
+   ./mvnw -pl eureka-server spring-boot:run
+   ```
+
+3. **Start the services:**  
+   *(In separate terminals or in your IDE)*
+   ```sh
+   ./mvnw -pl resource-service spring-boot:run
+   ./mvnw -pl song-service spring-boot:run
+   ./mvnw -pl api-gateway spring-boot:run
+   ```
+
+**Access URLs while running locally:**
+- resource-service: [http://localhost:8080](http://localhost:8080)
+- song-service: [http://localhost:8081](http://localhost:8081)
+- api-gateway: http://localhost:8778(http://localhost:8778)
+- eureka dashboard: [http://localhost:8761](http://localhost:8761)
+
+---
+#### **API Gateway Logging**
+
+The `LoggingFilter` provides routing logs locally and in Docker. Example log output:
+
+```
+Incoming request: POST http://localhost:8778/song-service/songs | Route: song-service -> lb://song-service
+Completed: POST http://localhost:8778/song-service/songs | Status: 201 CREATED | Time: 42 ms
+```
+
+### Option 2: Run Everything in Docker (Recommended!)
+
+Just want it to work, with no manual steps?
+
+```sh
 docker compose up -d --build
 ```
-Verify:
-- resource-service: http://localhost:8080
-- song-service: http://localhost:8081
 
-To stop everything:
-```shell
+Now, you call APIs ONLY through the **API Gateway**:
+
+- resource-service: [http://localhost:8778/resource-service](http://localhost:8778/resource-service)
+- song-service: [http://localhost:8778/song-service](http://localhost:8778/song-service)
+- eureka dashboard: [http://localhost:8761](http://localhost:8761)
+
+Stop everything with:
+
+```sh
 docker compose down
 ```
-> Note: database data is not persisted between restarts (no mounted data volume).
+
+*(Pro tip: Your DBs won't persist data unless you add volumes.)*
 
 ---
 
-## Configuration notes
+## How to Call the APIs
 
-- Database schema is initialized by SQL scripts mounted into the PostgreSQL containers (see `init-scripts/`).
-- Hibernate DDL auto-generation is disabled (`spring.jpa.hibernate.ddl-auto=none`).
+### resource-service
 
----
+| Method | Path                            | Local URL                                | Docker/Gateway URL                          | Description                                 |
+|--------|---------------------------------|------------------------------------------|---------------------------------------------|---------------------------------------------|
+| POST   | `/resources`                    | http://localhost:8080/resources          | http://localhost:8778/resource-service/resources | Upload MP3 audio (Content-Type: audio/mpeg) |
+| GET    | `/resources/{id}`               | http://localhost:8080/resources/{id}     | http://localhost:8778/resource-service/resources/{id} | Download MP3 bytes by resource ID           |
+| DELETE | `/resources?id=1,2,3` (CSV ids) | http://localhost:8080/resources?id=1,2,3 | http://localhost:8778/resource-service/resources?id=1,2,3 | Delete resource(s) by CSV of IDs            |
 
-## Example usage
+**Examples:**
 
-### Upload an MP3
-```shell
+_Local:_
+```sh
 curl -X POST "http://localhost:8080/resources" \
   -H "Content-Type: audio/mpeg" \
-  --data-binary "@./path/to/file.mp3"
-```
+  --data-binary "@./your-file.mp3"
 
-Response contains the generated resource ID.
+curl -L "http://localhost:8080/resources/123" --output file.mp3
 
-### Download an MP3
-```shell
-curl -L "http://localhost:8080/resources/<id>" --output downloaded.mp3
-```
-
-### Delete resources (CSV)
-```shell
 curl -X DELETE "http://localhost:8080/resources?id=1,2,3"
 ```
+_Docker Compose (through API Gateway):_
+```sh
+curl -X POST "http://localhost:8778/resource-service/resources" \
+  -H "Content-Type: audio/mpeg" \
+  --data-binary "@./your-file.mp3"
 
-### Fetch song metadata
-```shell
-curl "http://localhost:8081/songs/<id>"
+curl -L "http://localhost:8778/resource-service/resources/123" --output file.mp3
+
+curl -X DELETE "http://localhost:8778/resource-service/resources?id=1,2,3"
 ```
 
 ---
 
-## Project structure
+### song-service
+
+| Method | Path                         | Local URL                                 | Docker/Gateway URL                         | Description                               |
+|--------|------------------------------|-------------------------------------------|--------------------------------------------|-------------------------------------------|
+| POST   | `/songs`                     | http://localhost:8081/songs               | http://localhost:8778/song-service/songs   | Create a song metadata record             |
+| GET    | `/songs/{id}`                | http://localhost:8081/songs/{id}          | http://localhost:8778/song-service/songs/{id} | Fetch song metadata by ID                 |
+| DELETE | `/songs?id=1,2,3` (CSV ids)  | http://localhost:8081/songs?id=1,2,3      | http://localhost:8778/song-service/songs?id=1,2,3 | Delete one or more songs by IDs (CSV)     |
+
+---
+
+### Sample Request Body (for Creating a Song)
+
+```json
+{
+  "id": 1,
+  "name": "Sample Song",
+  "artist": "Artist Name",
+  "album": "Album Title",
+  "duration": "01:40",
+  "year": "2024"
+}
+```
+
+---
+
+### Validation Rules
+
+- **All fields are required.**
+- **id**: Numeric, must match an existing Resource ID.
+- **name**: Text, 1-100 characters.
+- **artist**: Text, 1-100 characters.
+- **album**: Text, 1-100 characters.
+- **duration**: String in `mm:ss` format, with leading zeros (e.g., `05:30`).
+- **year**: 4-digit year in `YYYY` format, between 1900–2099.
+
+---
+
+**Examples:**
+
+_Local:_
+```sh
+curl -X POST "http://localhost:8081/songs" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Sample Song","artist":"Artist","album":"Album","year":2024,"duration":01:23,"id":123}'
+
+curl "http://localhost:8081/songs/123"
+
+curl -X DELETE "http://localhost:8081/songs?id=1,2,3"
+```
+_Docker Compose (through API Gateway):_
+```sh
+curl -X POST "http://localhost:8778/song-service/songs" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Sample Song","artist":"Artist","album":"Album","year":2024,"duration":01:23,"id":123}'
+
+curl "http://localhost:8778/song-service/songs/123"
+
+curl -X DELETE "http://localhost:8778/song-service/songs?id=1,2,3"
+```
+
+## Project Structure
 
 ```
 audio-library-system/
-init-scripts/
-resource-service/
-song-service/
-compose.yaml
-.env
+  api-gateway/
+  eureka-server/
+  init-scripts/
+  resource-service/
+  song-service/
+  compose.yaml
+  .env
 ```
