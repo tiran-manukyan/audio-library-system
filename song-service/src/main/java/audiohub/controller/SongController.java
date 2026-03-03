@@ -1,5 +1,7 @@
 package audiohub.controller;
 
+import audiohub.dto.BulkCreateSongsRequest;
+import audiohub.dto.BulkDeleteSongsRequest;
 import audiohub.dto.CreateSongResponse;
 import audiohub.dto.DeleteSongsResponse;
 import audiohub.dto.SongDto;
@@ -30,6 +32,12 @@ public class SongController {
         return ResponseEntity.ok(response);
     }
 
+    @PostMapping("/bulk")
+    public ResponseEntity<Void> createSongsBulk(@Valid @RequestBody BulkCreateSongsRequest request) {
+        songService.createSongsBulk(request);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping("/{id}")
     public ResponseEntity<SongDto> getSong(@PathVariable String id) {
         SongDto song = songService.getSong(id);
@@ -42,5 +50,11 @@ public class SongController {
         DeleteSongsResponse response = songService.deleteSongs(idCsv);
 
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/delete-bulk")
+    public ResponseEntity<DeleteSongsResponse> deleteBulk(@Valid @RequestBody BulkDeleteSongsRequest request) {
+        songService.deleteSongsBulk(request.ids());
+        return ResponseEntity.noContent().build();
     }
 }

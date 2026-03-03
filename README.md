@@ -16,15 +16,14 @@ A simple, practical microservices playground using **Spring Boot**, **Spring Dat
   Registers and helps services find each other. Check the dashboard at [http://localhost:8761](http://localhost:8761).
 
 - **api-gateway**  
-  (Docker only!) Lets you call all backend APIs through one URL.
+  Lets you call all backend APIs through one URL.
 
 ---
 
 ## How Everything Talks
 
 All the services register with Eureka.  
-When *in Docker Compose*, you call APIs via the gateway.  
-When *developing locally*, call each service directly!
+You can call APIs either directly to each service, or through the gateway.
 
 ---
 
@@ -59,12 +58,14 @@ When *developing locally*, call each service directly!
    ```
 
 **Access URLs while running locally:**
+
 - resource-service: [http://localhost:8080](http://localhost:8080)
 - song-service: [http://localhost:8081](http://localhost:8081)
-- api-gateway: http://localhost:8778(http://localhost:8778)
+- api-gateway: [http://localhost:8778](http://localhost:8778)
 - eureka dashboard: [http://localhost:8761](http://localhost:8761)
 
 ---
+
 #### **API Gateway Logging**
 
 The `LoggingFilter` provides routing logs locally and in Docker. Example log output:
@@ -102,15 +103,16 @@ docker compose down
 
 ### resource-service
 
-| Method | Path                            | Local URL                                | Docker/Gateway URL                          | Description                                 |
-|--------|---------------------------------|------------------------------------------|---------------------------------------------|---------------------------------------------|
-| POST   | `/resources`                    | http://localhost:8080/resources          | http://localhost:8778/resource-service/resources | Upload MP3 audio (Content-Type: audio/mpeg) |
-| GET    | `/resources/{id}`               | http://localhost:8080/resources/{id}     | http://localhost:8778/resource-service/resources/{id} | Download MP3 bytes by resource ID           |
+| Method | Path                            | Direct URL                               | Gateway URL                                               | Description                                 |
+|--------|---------------------------------|------------------------------------------|-----------------------------------------------------------|---------------------------------------------|
+| POST   | `/resources`                    | http://localhost:8080/resources          | http://localhost:8778/resource-service/resources          | Upload MP3 audio (Content-Type: audio/mpeg) |
+| GET    | `/resources/{id}`               | http://localhost:8080/resources/{id}     | http://localhost:8778/resource-service/resources/{id}     | Download MP3 bytes by resource ID           |
 | DELETE | `/resources?id=1,2,3` (CSV ids) | http://localhost:8080/resources?id=1,2,3 | http://localhost:8778/resource-service/resources?id=1,2,3 | Delete resource(s) by CSV of IDs            |
 
 **Examples:**
 
-_Local:_
+_Direct:_
+
 ```sh
 curl -X POST "http://localhost:8080/resources" \
   -H "Content-Type: audio/mpeg" \
@@ -120,7 +122,9 @@ curl -L "http://localhost:8080/resources/123" --output file.mp3
 
 curl -X DELETE "http://localhost:8080/resources?id=1,2,3"
 ```
-_Docker Compose (through API Gateway):_
+
+_Via Gateway:_
+
 ```sh
 curl -X POST "http://localhost:8778/resource-service/resources" \
   -H "Content-Type: audio/mpeg" \
@@ -135,11 +139,11 @@ curl -X DELETE "http://localhost:8778/resource-service/resources?id=1,2,3"
 
 ### song-service
 
-| Method | Path                         | Local URL                                 | Docker/Gateway URL                         | Description                               |
-|--------|------------------------------|-------------------------------------------|--------------------------------------------|-------------------------------------------|
-| POST   | `/songs`                     | http://localhost:8081/songs               | http://localhost:8778/song-service/songs   | Create a song metadata record             |
-| GET    | `/songs/{id}`                | http://localhost:8081/songs/{id}          | http://localhost:8778/song-service/songs/{id} | Fetch song metadata by ID                 |
-| DELETE | `/songs?id=1,2,3` (CSV ids)  | http://localhost:8081/songs?id=1,2,3      | http://localhost:8778/song-service/songs?id=1,2,3 | Delete one or more songs by IDs (CSV)     |
+| Method | Path                        | Direct URL                           | Gateway URL                                       | Description                           |
+|--------|-----------------------------|--------------------------------------|---------------------------------------------------|---------------------------------------|
+| POST   | `/songs`                    | http://localhost:8081/songs          | http://localhost:8778/song-service/songs          | Create a song metadata record         |
+| GET    | `/songs/{id}`               | http://localhost:8081/songs/{id}     | http://localhost:8778/song-service/songs/{id}     | Fetch song metadata by ID             |
+| DELETE | `/songs?id=1,2,3` (CSV ids) | http://localhost:8081/songs?id=1,2,3 | http://localhost:8778/song-service/songs?id=1,2,3 | Delete one or more songs by IDs (CSV) |
 
 ---
 
@@ -172,7 +176,8 @@ curl -X DELETE "http://localhost:8778/resource-service/resources?id=1,2,3"
 
 **Examples:**
 
-_Local:_
+_Direct:_
+
 ```sh
 curl -X POST "http://localhost:8081/songs" \
   -H "Content-Type: application/json" \
@@ -182,7 +187,9 @@ curl "http://localhost:8081/songs/123"
 
 curl -X DELETE "http://localhost:8081/songs?id=1,2,3"
 ```
-_Docker Compose (through API Gateway):_
+
+_Via Gateway:_
+
 ```sh
 curl -X POST "http://localhost:8778/song-service/songs" \
   -H "Content-Type: application/json" \
@@ -192,6 +199,36 @@ curl "http://localhost:8778/song-service/songs/123"
 
 curl -X DELETE "http://localhost:8778/song-service/songs?id=1,2,3"
 ```
+
+## Outbox Pattern
+
+The `resource-service` uses the **Transactional Outbox Pattern** to reliably propagate metadata events to `song-service`
+without distributed transactions.
+
+When a resource is uploaded or deleted, an `outbox_events` record is written **in the same database transaction** as the
+main operation. This guarantees the event is never lost even if the downstream call fails immediately after.
+
+**How delivery works – two layers:**
+
+1. **Immediate delivery** – after the transaction commits, a `TransactionalEventListener` fires and attempts to call
+   `song-service` right away (async, on a dedicated thread pool). If it succeeds, the outbox record is deleted on the
+   spot.
+
+2. **Scheduler fallback** – if the immediate attempt fails (e.g. `song-service` is down), scheduled jobs periodically
+   pick up undelivered events in batches and retry until `maxAttempts` is reached.
+
+**Key config properties (`outbox.*`):**
+
+| Property                        | Default | Description                              |
+|---------------------------------|---------|------------------------------------------|
+| `outbox.max-attempts`           | `5`     | How many times to retry a failed event   |
+| `outbox.create-batch-size`      | `50`    | Batch size for CREATE scheduler          |
+| `outbox.delete-batch-size`      | `200`   | Batch size for DELETE scheduler          |
+| `outbox.scheduler.enabled`      | `true`  | Toggle the scheduler on/off              |
+| `outbox.scheduler.create-delay` | `5s`    | How often to retry pending CREATE events |
+| `outbox.scheduler.delete-delay` | `60s`   | How often to retry pending DELETE events |
+
+---
 
 ## Project Structure
 

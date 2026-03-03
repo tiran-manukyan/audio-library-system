@@ -13,6 +13,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.Validator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,8 +29,9 @@ public class Mp3ResourceService {
     private final Validator validator;
     private final ResourceRepository resourceRepository;
     private final AudioMetadataExtractor metadataExtractor;
-    private final SongServiceClient songServiceClient;
+    private final OutboxEventService outboxEventService;
     private final ResourceIdParser resourceIdParser;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public UploadResourceResponse store(byte[] audioData) {
@@ -44,11 +46,16 @@ public class Mp3ResourceService {
                 .build();
 
         resource = resourceRepository.save(resource);
-        songServiceClient.createSongMetadata(resource.getId(), metadata);
+        outboxEventService.enqueueCreateMetadata(resource.getId(), metadata);
 
-        log.info("Saved resource with ID: {}", resource.getId());
+        log.info("Saved resource with ID: {} and enqueued outbox event", resource.getId());
 
-        return new UploadResourceResponse(resource.getId());
+        Long resourceId = resource.getId();
+        eventPublisher.publishEvent(
+                new TransactionalEventPublisher.ResourceCreatedEvent(resourceId, metadata)
+        );
+
+        return new UploadResourceResponse(resourceId);
     }
 
     public byte[] getResource(String id) {
@@ -79,9 +86,13 @@ public class Mp3ResourceService {
             return new DeleteResourcesResponse(Set.of());
         }
 
-        songServiceClient.deleteSongMetadataCSV(deletedIds);
+        outboxEventService.enqueueDeleteMetadata(deletedIds);
 
-        log.info("Deleted {} resources", deletedIds.size());
+        log.info("Deleted {} resources and enqueued delete events", deletedIds.size());
+
+        eventPublisher.publishEvent(
+                new TransactionalEventPublisher.ResourcesDeletedEvent(deletedIds)
+        );
 
         return new DeleteResourcesResponse(deletedIds);
     }
